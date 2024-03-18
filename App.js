@@ -1,8 +1,9 @@
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, Text } from 'react-native';
 import { useState, useRef, useEffect } from 'react';
+import 'react-native-get-random-values';
 
 import * as Location from 'expo-location'
-import MapView, {Marker} from 'react-native-maps';
+import MapView, {Marker, Callout} from 'react-native-maps';
 
 import { doc, updateDoc, getDoc, collection, addDoc } from 'firebase/firestore';
 import { app, database, storage } from './firebase';
@@ -14,11 +15,12 @@ import * as ImagePicker from 'expo-image-picker';
 
 
 export default function App() {
-  
+ 
   const [ text, setText ] = useState('');
   const [images, setImages] = useState ([])
+  const [values, loading, error] = useCollection(collection(database, "map"));
 // Henter documents fra firebase, laver et object af hvert doc og tilføjer id som property.
-  // const data = values?.docs.map((doc) => ({...doc.data(), id:doc.id}))
+  const data = values?.docs.map((doc) => ({...doc.data(), id:doc.id}))
   
   const [markers, setMarkers] = useState([])
   const [region, setRegion] = useState({
@@ -65,24 +67,45 @@ export default function App() {
 
 
 
-  function addMarker(data){
+  async function addMarker(data){
     const {latitude, longitude} = data.nativeEvent.coordinate
+    console.log(latitude + " " + longitude)
+
+    let locationDetails = await Location.reverseGeocodeAsync({latitude,longitude})
+    if(locationDetails && locationDetails.length>0){
+      const { city, country, name, region, street } = locationDetails[0];
+      const locationInfo = `Name: ${name}, City: ${city}, Region: ${region}, Country: ${country}, Street: ${street}`;
+      console.log(locationInfo);
+    
+
     const newMarker = {
       coordinate: {latitude, longitude},
-      key: data.timeStamp,
-      title: "Great Place"
+      key: uuidv4(),
+      title: city || region || country || "Location",
+      description: locationInfo
     }
-    setMarkers([...markers, newMarker])
+
+  
+      const docRef = await addDoc(collection(database, "map"), {
+        ...newMarker, markerId:docRef.id
+      });
+    // setMarkers([...markers, newMarker])
+  } else {
+    console.log("No location details on this coordinate")
+  }
   }
 
   
-  async function onMarkerPressed(){
+  async function onMarkerPressed(markerTitle){
+    
     alert("you pressed ")
     try{
-      await addDoc(collection(database,"map", marker),{
-        text: "Hej Lotte"
-      })
-
+      const docRef = await addDoc(collection(database,"map"), {
+        text: markerTitle,
+        
+      });
+      
+    
     }catch(err){
       console.log("Error adding to DB " + err)
     }
@@ -98,21 +121,55 @@ export default function App() {
     }
   }
 
+  async function launchCamera(){
+    const result = await ImagePicker.requestCameraPermissionsAsync()
+    if(result.granted===false){
+      console.log("Access to camera not allowed")
+    }else {
+      ImagePicker-ImagePicker.launchCameraAsync({
+        quality:1
+      })
+      .then((response)=> {
+        console.log("Image loaded" + response)
+        // setImagePath(response.assets[0].uri)
+        uploadImage(response.assets[0].uri)
+      })
+    }
+  }
+
   async function uploadImage(imageUri){
+    if(!selectedMarkerId) {
+      console.log("No marker selected for uploading image");
+      return;
+    }
+
     const imageId = uuidv4();
     try{
       const res = await fetch(imageUri)
       const blob = await res.blob()
-      const storageRef = ref(storage, `images/${details.id}/${imageId}.jpg`)
+      const storageRef = ref(storage, `images/${selectedMarkerId}${imageId}.jpg`)
       await uploadBytes(storageRef, blob);
       const imageUrl = await getDownloadURL(storageRef);
-      addImageToNote(imageId, imageUrl);
+      addImageToLocation(imageId, imageUrl);
       alert("ImageUploaded");
 
     }catch (err) {
       console.error("Error uploading image", err);
     }
   }
+
+  async function addImageToLocation(imageId, imageUrl) {
+  
+    try {
+      const updatedImages = [...images, { id: imageId, url: imageUrl }];
+      await updateDoc(mapRef, { images: updatedImages }); // Firestore update
+  
+      setImages(updatedImages); // Local state update
+    } catch (err) {
+      console.error("Error adding image to note", err);
+    }
+  }
+  
 
   return (
     <View style={styles.container}>
@@ -121,13 +178,21 @@ export default function App() {
       region={region}
       onLongPress={addMarker} >
       
-      {markers.map(marker => (
+      {markers.map ((marker) => (
         <Marker
         coordinate={marker.coordinate}
         key={marker.key}
         title={marker.title}
-        onPress={() => {launchImagePicker(), onMarkerPressed(marker.title)}}
-        />
+        onPress={() => onMarkerPressed(marker.title)}
+        >
+        
+        <Callout onPress={launchImagePicker}>
+      <View>
+        <Text>{marker.title}</Text>
+        <Text style={{ color: '#8e0afa', paddingTop: 10 }}>add image</Text>
+      </View>
+    </Callout>
+        </Marker>
       ))}
 
       </MapView>
