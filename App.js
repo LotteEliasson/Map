@@ -84,12 +84,8 @@ export default function App() {
       title: city || region || country || "Location",
       description: locationInfo
     }
-
-  
-      const docRef = await addDoc(collection(database, "map"), {
-        ...newMarker, markerId:docRef.id
-      });
-    // setMarkers([...markers, newMarker])
+      
+    setMarkers([...markers, newMarker])
   } else {
     console.log("No location details on this coordinate")
   }
@@ -104,7 +100,8 @@ export default function App() {
         text: markerTitle,
         
       });
-      
+      console.log("marker with id ", docRef.id)
+      return docRef.id  
     
     }catch(err){
       console.log("Error adding to DB " + err)
@@ -138,19 +135,19 @@ export default function App() {
   }
 
   async function uploadImage(imageUri){
-    if(!selectedMarkerId) {
-      console.log("No marker selected for uploading image");
-      return;
-    }
+    // if(!selectedMarkerId) {
+    //   console.log("No marker selected for uploading image");
+    //   return;
+    // }
 
     const imageId = uuidv4();
     try{
       const res = await fetch(imageUri)
       const blob = await res.blob()
-      const storageRef = ref(storage, `images/${selectedMarkerId}${imageId}.jpg`)
+      const storageRef = ref(storage, `images/${imageId}.jpg`)
       await uploadBytes(storageRef, blob);
       const imageUrl = await getDownloadURL(storageRef);
-      addImageToLocation(imageId, imageUrl);
+      // addImageToLocation(imageId, imageUrl);
       alert("ImageUploaded");
 
     }catch (err) {
@@ -158,17 +155,18 @@ export default function App() {
     }
   }
 
-  async function addImageToLocation(imageId, imageUrl) {
+  // async function addImageToLocation(imageId, imageUrl) {
   
-    try {
-      const updatedImages = [...images, { id: imageId, url: imageUrl }];
-      await updateDoc(mapRef, { images: updatedImages }); // Firestore update
+  //   try {
+  //     const mapRef = doc(database, "map");
+  //     const updatedImages = [...images, { id: imageId, url: imageUrl }];
+  //     await updateDoc(mapRef, { images: updatedImages }); // Firestore update
   
-      setImages(updatedImages); // Local state update
-    } catch (err) {
-      console.error("Error adding image to note", err);
-    }
-  }
+  //     setImages(updatedImages); // Local state update
+  //   } catch (err) {
+  //     console.error("Error adding image to note", err);
+  //   }
+  // }
   
 
   return (
