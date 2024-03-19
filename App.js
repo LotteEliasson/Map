@@ -1,11 +1,11 @@
-import { StyleSheet, View, TouchableOpacity, Text } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Image } from 'react-native';
 import { useState, useRef, useEffect } from 'react';
 import 'react-native-get-random-values';
 
 import * as Location from 'expo-location'
 import MapView, {Marker, Callout} from 'react-native-maps';
 
-import { doc, updateDoc, getDoc, collection, addDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, collection, addDoc, setDoc } from 'firebase/firestore';
 import { app, database, storage } from './firebase';
 import { useCollection } from 'react-firebase-hooks/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject} from 'firebase/storage';
@@ -22,6 +22,7 @@ export default function App() {
 // Henter documents fra firebase, laver et object af hvert doc og tilføjer id som property.
   const data = values?.docs.map((doc) => ({...doc.data(), id:doc.id}))
   
+  const [selectedMarkerId, setSelectedMarkerId] = useState(null); 
   const [markers, setMarkers] = useState([])
   const [region, setRegion] = useState({
     latitude:55,
@@ -32,6 +33,7 @@ export default function App() {
 // useRef holde en reference på tværs af rendering
   const mapView = useRef(null);
   const locationSubscription = useRef(null);
+
 
   useEffect (() =>{
     async function startListening(){
@@ -77,44 +79,65 @@ export default function App() {
       const locationInfo = `Name: ${name}, City: ${city}, Region: ${region}, Country: ${country}, Street: ${street}`;
       console.log(locationInfo);
     
+      const markerId = uuidv4();
 
     const newMarker = {
+      id: markerId,
       coordinate: {latitude, longitude},
-      key: uuidv4(),
+      key: markerId,
       title: city || region || country || "Location",
-      description: locationInfo
+      description: locationInfo,
+      images: [],
     }
       
-    setMarkers([...markers, newMarker])
+    setMarkers((prevMarker) => [...markers, newMarker])
+
+    try {
+      await setDoc(doc(database, "map", markerId), newMarker);
+      console.log("Document written with ID: ", markerId);
+    } catch (err) {
+      console.error("Error adding document: ", err);
+    }
+
   } else {
     console.log("No location details on this coordinate")
   }
   }
 
   
-  async function onMarkerPressed(markerTitle){
-    
-    alert("you pressed ")
+  async function onMarkerPressed(markerTitle, markerId){
+    setSelectedMarkerId(markerId);
+    // alert(`Marker pressed: ${markerTitle}`);
     try{
       const docRef = await addDoc(collection(database,"map"), {
         text: markerTitle,
-        
+        id: markerId
       });
       console.log("marker with id ", docRef.id)
-      return docRef.id  
-    
+     
     }catch(err){
       console.log("Error adding to DB " + err)
     }
+
+    const markerRef = doc(database, "map", markerId);
+    const markerDoc = await getDoc(markerRef);
+    if (markerDoc.exists()) {
+      const markerData = markerDoc.data();
+      // Assuming images is an array of image URLs
+      setImages(markerData.images || []);
+    } else {
+      console.log("No such marker!");
+      setImages([]);
+    }
   }
 
-  async function launchImagePicker(){
+  async function launchImagePicker(markerId){
     let result = await ImagePicker.launchImageLibraryAsync({
       allowEditing: true
     })
     if(!result.canceled){
       
-      uploadImage(result.assets[0].uri)
+      uploadImage(result.assets[0].uri, markerId)
     }
   }
 
@@ -128,26 +151,26 @@ export default function App() {
       })
       .then((response)=> {
         console.log("Image loaded" + response)
-        // setImagePath(response.assets[0].uri)
-        uploadImage(response.assets[0].uri)
+        uploadImage(response.assets[0].uri, selectedMarkerId)
       })
     }
   }
 
-  async function uploadImage(imageUri){
-    // if(!selectedMarkerId) {
-    //   console.log("No marker selected for uploading image");
-    //   return;
-    // }
+  async function uploadImage(imageUri, markerId){
+
+    if (!markerId) {
+      alert('No marker selected');
+      return;
+    }
 
     const imageId = uuidv4();
     try{
       const res = await fetch(imageUri)
       const blob = await res.blob()
-      const storageRef = ref(storage, `images/${imageId}.jpg`)
+      const storageRef = ref(storage, `images/${markerId}/${imageId}.jpg`)
       await uploadBytes(storageRef, blob);
       const imageUrl = await getDownloadURL(storageRef);
-      // addImageToLocation(imageId, imageUrl);
+      addImageToMarker(imageId, imageUrl, selectedMarkerId);
       alert("ImageUploaded");
 
     }catch (err) {
@@ -155,18 +178,18 @@ export default function App() {
     }
   }
 
-  // async function addImageToLocation(imageId, imageUrl) {
+ async function addImageToMarker(imageId, imageUrl, markerId) {
   
-  //   try {
-  //     const mapRef = doc(database, "map");
-  //     const updatedImages = [...images, { id: imageId, url: imageUrl }];
-  //     await updateDoc(mapRef, { images: updatedImages }); // Firestore update
+    try {
+      const mapRef = doc(database, "map", markerId);
+      const updatedImages = [...images, { id: imageId, url: imageUrl }];
+      await updateDoc(mapRef, { images: updatedImages }); // Firestore update
   
-  //     setImages(updatedImages); // Local state update
-  //   } catch (err) {
-  //     console.error("Error adding image to note", err);
-  //   }
-  // }
+      setImages(updatedImages); // Local state update
+    } catch (err) {
+      console.error("Error adding image to note", err);
+    }
+  } 
   
 
   return (
@@ -181,20 +204,29 @@ export default function App() {
         coordinate={marker.coordinate}
         key={marker.key}
         title={marker.title}
-        onPress={() => onMarkerPressed(marker.title)}
+        onPress={() => {onMarkerPressed(marker.title, marker.id)}}
         >
         
-        <Callout onPress={launchImagePicker}>
-      <View>
-        <Text>{marker.title}</Text>
-        <Text style={{ color: '#8e0afa', paddingTop: 10 }}>add image</Text>
-      </View>
-    </Callout>
+        <Callout onPress={()=> {launchImagePicker(marker.id)}}>
+          <View>
+            <Text>{marker.title}</Text>
+            <Text style={{ color: '#8e0afa', paddingTop: 10 }}>add image</Text>
+          </View>
+        </Callout>
         </Marker>
       ))}
 
       </MapView>
 
+      <View style={styles.imageContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {images.map((img, index) => (
+            <View key={index} style={styles.imageWrapper}>
+              <Image source={{ uri: img.url }} style={styles.image} />
+            </View>
+          ))}
+        </ScrollView>
+      </View>
     </View>
   );
 }
