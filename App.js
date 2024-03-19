@@ -5,7 +5,7 @@ import 'react-native-get-random-values';
 import * as Location from 'expo-location'
 import MapView, {Marker, Callout} from 'react-native-maps';
 
-import { doc, updateDoc, getDoc, collection, addDoc, setDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, collection, addDoc, setDoc, getDocs } from 'firebase/firestore';
 import { app, database, storage } from './firebase';
 import { useCollection } from 'react-firebase-hooks/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject} from 'firebase/storage';
@@ -33,6 +33,37 @@ export default function App() {
 // useRef holde en reference på tværs af rendering
   const mapView = useRef(null);
   const locationSubscription = useRef(null);
+
+  useEffect(() => {
+    const fetchMarkers = async () => {
+      try{
+      const querySnapshot = await getDocs(collection(database, "map"));
+      const fetchedMarkers = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        const coordinate = data.coordinate || {};
+        
+        return {
+          ...data,
+          id: doc.id, 
+          key: doc.id, 
+          coordinate: {
+            
+            latitude: coordinate.latitude || 0, 
+            longitude: coordinate.longitude || 0,
+          },
+          
+        };
+      });
+      console.log(fetchedMarkers);
+      setMarkers(fetchedMarkers);
+    } catch(err){
+      console.error("err fetching markers", err);
+    }
+    };
+  
+    fetchMarkers();
+  }, []);
+  
 
 
   useEffect (() =>{
@@ -108,16 +139,16 @@ export default function App() {
   async function onMarkerPressed(markerTitle, markerId){
     setSelectedMarkerId(markerId);
     // alert(`Marker pressed: ${markerTitle}`);
-    try{
-      const docRef = await addDoc(collection(database,"map"), {
-        text: markerTitle,
-        id: markerId
-      });
-      console.log("marker with id ", docRef.id)
+    // try{
+    //   const docRef = await addDoc(collection(database,"map"), {
+    //     text: markerTitle,
+    //     id: markerId
+    //   });
+    //   console.log("marker with id ", docRef.id)
      
-    }catch(err){
-      console.log("Error adding to DB " + err)
-    }
+    // }catch(err){
+    //   console.log("Error adding to DB " + err)
+    // }
 
     const markerRef = doc(database, "map", markerId);
     const markerDoc = await getDoc(markerRef);
@@ -141,20 +172,6 @@ export default function App() {
     }
   }
 
-  async function launchCamera(){
-    const result = await ImagePicker.requestCameraPermissionsAsync()
-    if(result.granted===false){
-      console.log("Access to camera not allowed")
-    }else {
-      ImagePicker-ImagePicker.launchCameraAsync({
-        quality:1
-      })
-      .then((response)=> {
-        console.log("Image loaded" + response)
-        uploadImage(response.assets[0].uri, selectedMarkerId)
-      })
-    }
-  }
 
   async function uploadImage(imageUri, markerId){
 
@@ -195,15 +212,20 @@ export default function App() {
   return (
     <View style={styles.container}>
       <MapView 
+
       style={styles.map}
       region={region}
       onLongPress={addMarker} >
       
       {markers.map ((marker) => (
         <Marker
-        coordinate={marker.coordinate}
-        key={marker.key}
+        coordinate={{
+          latitude: marker.coordinate.latitude,
+          longitude: marker.coordinate.longitude,
+        }}
+        key={marker.id}
         title={marker.title}
+        description={marker.description}
         onPress={() => {onMarkerPressed(marker.title, marker.id)}}
         >
         
