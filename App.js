@@ -1,4 +1,4 @@
-import { StyleSheet, View, Text, ScrollView, Image } from 'react-native';
+import { StyleSheet, View, Text, FlatList, Image } from 'react-native';
 import { useState, useRef, useEffect } from 'react';
 import 'react-native-get-random-values';
 
@@ -219,13 +219,18 @@ export default function App() {
       </MapView>
 
       <View style={styles.imageContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {images.map((img, index) => (
-            <View key={index} style={styles.imageWrapper}>
-              <Image source={{ uri: img.url }} style={styles.image} />
+        <FlatList  
+          data = {images}
+          horizontal={true}
+          keyExtractor={(item) => item.id}  //Giver hver item i FlatList en unik key value.
+          renderItem = {({item}) => (
+            <View style={styles.imageDB}>
+              
+                <Image style={{width: 150, height: 150}} source={{uri:item.url}}/>
+                         
             </View>
-          ))}
-        </ScrollView>
+          )}
+        />
       </View>
     </View>
   );
@@ -236,7 +241,22 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   map: {
-    width: '100%',
-    height: '100%',
+    flex: 1
+    // width: '100%',
+    // height: '100%',
+  },
+
+  imageContainer: {
+    height:100,
+    flexDirection: 'row',
+    justifyContent: "flex-end",
+    alignItems: 'center',
+    marginBottom: 10
+  },
+  imageDB: {
+    marginRight: 10,
+    // flexDirection: 'row',
+    // justifyContent: 'flex-start',
+    // alignItems: 'flex-start',
   },
 });
