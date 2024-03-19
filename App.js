@@ -16,7 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 export default function App() {
  
-  const [ text, setText ] = useState('');
+ 
   const [images, setImages] = useState ([])
   const [values, loading, error] = useCollection(collection(database, "map"));
 // Henter documents fra firebase, laver et object af hvert doc og tilføjer id som property.
@@ -136,25 +136,13 @@ export default function App() {
   }
 
   
-  async function onMarkerPressed(markerTitle, markerId){
+  async function onMarkerPressed(markerId){
     setSelectedMarkerId(markerId);
-    // alert(`Marker pressed: ${markerTitle}`);
-    // try{
-    //   const docRef = await addDoc(collection(database,"map"), {
-    //     text: markerTitle,
-    //     id: markerId
-    //   });
-    //   console.log("marker with id ", docRef.id)
-     
-    // }catch(err){
-    //   console.log("Error adding to DB " + err)
-    // }
 
     const markerRef = doc(database, "map", markerId);
     const markerDoc = await getDoc(markerRef);
     if (markerDoc.exists()) {
       const markerData = markerDoc.data();
-      // Assuming images is an array of image URLs
       setImages(markerData.images || []);
     } else {
       console.log("No such marker!");
@@ -173,6 +161,7 @@ export default function App() {
   }
 
 
+
   async function uploadImage(imageUri, markerId){
 
     if (!markerId) {
@@ -188,7 +177,7 @@ export default function App() {
       await uploadBytes(storageRef, blob);
       const imageUrl = await getDownloadURL(storageRef);
       addImageToMarker(imageId, imageUrl, selectedMarkerId);
-      alert("ImageUploaded");
+      // alert("ImageUploaded");
 
     }catch (err) {
       console.error("Error uploading image", err);
@@ -212,11 +201,9 @@ export default function App() {
   return (
     <View style={styles.container}>
       <MapView 
-
       style={styles.map}
       region={region}
       onLongPress={addMarker} >
-      
       {markers.map ((marker) => (
         <Marker
         coordinate={{
@@ -226,9 +213,8 @@ export default function App() {
         key={marker.id}
         title={marker.title}
         description={marker.description}
-        onPress={() => {onMarkerPressed(marker.title, marker.id)}}
+        onPress={() => {onMarkerPressed(marker.id)}}
         >
-        
         <Callout onPress={()=> {launchImagePicker(marker.id)}}>
           <View>
             <Text>{marker.title}</Text>
@@ -237,9 +223,7 @@ export default function App() {
         </Callout>
         </Marker>
       ))}
-
       </MapView>
-
       <View style={styles.imageContainer}>
         <FlatList  
           data = {images}
@@ -273,7 +257,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: "flex-end",
     alignItems: 'center',
-    marginBottom: 10
+    padding: 5,
+    backgroundColor: '#000',
+    
   },
   imageDB: {
     marginRight: 10,
